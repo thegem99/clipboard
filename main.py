@@ -53,14 +53,14 @@ window.onload = function(){ showSection('text'); }
 <div id="text" class="section">
     <h2>📤 Send Text</h2>
     <form method="POST" action="/send_text">
-        <textarea name="data" placeholder="Enter your text..."></textarea>
+        <textarea name="data" placeholder="Enter your text...">{{ text_value or "" }}</textarea>
         <button class="send" type="submit">Send Text</button>
     </form>
     <p>{{ code }}</p>
 
     <h2>📥 Receive Text</h2>
     <form method="POST" action="/get">
-        <input name="code" placeholder="Enter code"/>
+        <input name="code" placeholder="Enter code" value="{{ code_value or '' }}"/>
         <button class="send" type="submit">Get Data</button>
     </form>
     <pre>{{ received }}</pre>
@@ -77,7 +77,7 @@ window.onload = function(){ showSection('text'); }
 
     <h2>📥 Receive Image</h2>
     <form method="POST" action="/get">
-        <input name="code" placeholder="Enter code"/>
+        <input name="code" placeholder="Enter code" value="{{ image_code_value or '' }}"/>
         <button class="send" type="submit">Get Image</button>
     </form>
 
@@ -105,7 +105,7 @@ def send_text():
         code = result.get("code", "Error")
     except:
         code = "Upload failed"
-    return render_template_string(HTML_PAGE, code=code)
+    return render_template_string(HTML_PAGE, code=code, text_value=data)
 
 @app.route("/send_file", methods=["POST"])
 def send_file_route():
@@ -126,9 +126,9 @@ def get():
     code = request.form.get("code")
     res = requests.get(f"{API_BASE}/api/get/{code}")
     if "application/json" not in res.headers.get("Content-Type", ""):
-        return render_template_string(HTML_PAGE, image=True, image_code=code)
+        return render_template_string(HTML_PAGE, image=True, image_code=code, image_code_value=code)
     result = res.json()
-    return render_template_string(HTML_PAGE, received=result.get("data", result.get("error")))
+    return render_template_string(HTML_PAGE, received=result.get("data", result.get("error")), code_value=code, text_value=result.get("data"))
 
 @app.route("/image/<code>")
 def get_image(code):
