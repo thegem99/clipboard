@@ -3,7 +3,7 @@ import requests
 
 app = Flask(__name__)
 
-API_BASE = "https://your-api-url.up.railway.app"  # 👈 change this
+API_BASE = "https://clipboardserver-production.up.railway.app/"  # 👈 change this
 
 HTML_PAGE = """
 <!DOCTYPE html>
