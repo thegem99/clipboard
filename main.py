@@ -36,7 +36,11 @@ function showSection(name){
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     document.getElementById(name+'-btn').classList.add('active');
 }
-window.onload = function(){ showSection('text'); }
+// Set the active tab based on server value
+window.onload = function() {
+    let section = "{{ section or 'text' }}";
+    showSection(section);
+};
 </script>
 </head>
 <body>
@@ -105,30 +109,52 @@ def send_text():
         code = result.get("code", "Error")
     except:
         code = "Upload failed"
-    return render_template_string(HTML_PAGE, code=code, text_value=data)
+    return render_template_string(HTML_PAGE, code=code, text_value=data, section="text")
 
 @app.route("/send_file", methods=["POST"])
 def send_file_route():
     file = request.files.get("file")
     if not file:
-        return render_template_string(HTML_PAGE, file_code="No file selected")
-    res = requests.post(f"{API_BASE}/api/send", files={"file": file})
+        return render_template_string(HTML_PAGE, file_code="No file selected", section="image")
+
+    res = requests.post(f"{API_BASE}/api/send", files={"file": (file.filename, file.stream, file.content_type)})
     try:
         result = res.json()
         code = result.get("code", "Error")
     except:
         print("API RESPONSE:", res.text)
         code = "Upload failed"
-    return render_template_string(HTML_PAGE, file_code=code)
+
+    # Show preview after upload
+    return render_template_string(
+        HTML_PAGE,
+        file_code=code,
+        image=True,
+        image_code=code,
+        section="image"
+    )
 
 @app.route("/get", methods=["POST"])
 def get():
     code = request.form.get("code")
     res = requests.get(f"{API_BASE}/api/get/{code}")
+    # Check if JSON (text) or raw (image)
     if "application/json" not in res.headers.get("Content-Type", ""):
-        return render_template_string(HTML_PAGE, image=True, image_code=code, image_code_value=code)
+        return render_template_string(
+            HTML_PAGE,
+            image=True,
+            image_code=code,
+            image_code_value=code,
+            section="image"
+        )
     result = res.json()
-    return render_template_string(HTML_PAGE, received=result.get("data", result.get("error")), code_value=code, text_value=result.get("data"))
+    return render_template_string(
+        HTML_PAGE,
+        received=result.get("data", result.get("error")),
+        code_value=code,
+        text_value=result.get("data"),
+        section="text"
+    )
 
 @app.route("/image/<code>")
 def get_image(code):
