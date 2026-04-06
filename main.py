@@ -1,71 +1,93 @@
-import tkinter as tk
+from flask import Flask, request, render_template_string
 import requests
 
-SERVER = "https://clipboardserver-production.up.railway.app/"  # change this
+app = Flask(__name__)
+
+API_BASE = "https://your-api-url.up.railway.app"  # 👈 change this
+
+HTML_PAGE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Data Share Client</title>
+    <style>
+        body {
+            font-family: Arial;
+            max-width: 600px;
+            margin: 40px auto;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .box {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>📤 Send Data</h2>
+<div class="box">
+    <form method="POST" action="/send">
+        <textarea name="data" placeholder="Enter data..."></textarea>
+        <button type="submit">Send</button>
+    </form>
+    <p>{{ code }}</p>
+</div>
+
+<h2>📥 Receive Data</h2>
+<div class="box">
+    <form method="POST" action="/get">
+        <input name="code" placeholder="Enter code"/>
+        <button type="submit">Get Data</button>
+    </form>
+    <pre>{{ received }}</pre>
+</div>
+
+</body>
+</html>
+"""
 
 
-def send_text():
-    text = send_box.get("1.0", tk.END).strip()
-
-    if not text:
-        result_label.config(text="Enter some text")
-        return
-
-    try:
-        res = requests.post(
-            SERVER + "/api/send",
-            json={"data": text}
-        )
-        code = res.json().get("code")
-        result_label.config(text=f"Code: {code}")
-    except Exception as e:
-        result_label.config(text=f"Error: {e}")
+@app.route("/", methods=["GET"])
+def home():
+    return render_template_string(HTML_PAGE)
 
 
-def get_text():
-    code = code_entry.get().strip()
+@app.route("/send", methods=["POST"])
+def send():
+    data = request.form.get("data")
 
-    if not code:
-        result_label.config(text="Enter code")
-        return
+    res = requests.post(
+        f"{API_BASE}/api/send",
+        json={"data": data}
+    )
 
-    try:
-        res = requests.get(SERVER + f"/api/get/{code}")
-        data = res.json()
-
-        if "data" in data:
-            receive_box.delete("1.0", tk.END)
-            receive_box.insert(tk.END, data["data"])
-            result_label.config(text="Received!")
-        else:
-            result_label.config(text=str(data))
-
-    except Exception as e:
-        result_label.config(text=f"Error: {e}")
+    result = res.json()
+    return render_template_string(HTML_PAGE, code=result.get("code", result))
 
 
-# UI setup
-root = tk.Tk()
-root.title("Online Clipboard")
+@app.route("/get", methods=["POST"])
+def get():
+    code = request.form.get("code")
 
-# SEND SECTION
-tk.Label(root, text="Send Text").pack()
-send_box = tk.Text(root, height=5, width=40)
-send_box.pack()
+    res = requests.get(f"{API_BASE}/api/get/{code}")
+    result = res.json()
 
-tk.Button(root, text="Send", command=send_text).pack()
+    return render_template_string(
+        HTML_PAGE,
+        received=result.get("data", result.get("error"))
+    )
 
-# RECEIVE SECTION
-tk.Label(root, text="Enter Code").pack()
-code_entry = tk.Entry(root)
-code_entry.pack()
 
-tk.Button(root, text="Receive", command=get_text).pack()
-
-receive_box = tk.Text(root, height=5, width=40)
-receive_box.pack()
-
-result_label = tk.Label(root, text="")
-result_label.pack()
-
-root.mainloop()
+if __name__ == "__main__":
+    app.run(debug=True)
