@@ -4,7 +4,8 @@ import io
 
 app = Flask(__name__)
 
-API_BASE = "https://clipboardserver-production.up.railway.app"  # no trailing slash
+# Replace this with your deployed API URL
+API_BASE = "https://clipboardserver-production.up.railway.app"  
 
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -12,30 +13,11 @@ HTML_PAGE = """
 <head>
     <title>Data Share Client</title>
     <style>
-        body {
-            font-family: Arial;
-            max-width: 600px;
-            margin: 40px auto;
-        }
-        textarea, input {
-            width: 100%;
-            padding: 10px;
-            margin-top: 10px;
-        }
-        button {
-            padding: 10px;
-            margin-top: 10px;
-            width: 100%;
-        }
-        .box {
-            border: 1px solid #ccc;
-            padding: 20px;
-            margin-bottom: 30px;
-        }
-        img {
-            max-width: 100%;
-            margin-top: 10px;
-        }
+        body { font-family: Arial; max-width: 600px; margin: 40px auto; }
+        textarea, input { width: 100%; padding: 10px; margin-top: 10px; }
+        button { padding: 10px; margin-top: 10px; width: 100%; }
+        .box { border: 1px solid #ccc; padding: 20px; margin-bottom: 30px; }
+        img { max-width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -76,76 +58,57 @@ HTML_PAGE = """
 </html>
 """
 
-
 @app.route("/")
 def home():
     return render_template_string(HTML_PAGE)
 
-
-# ✅ Send text
+# Send text
 @app.route("/send_text", methods=["POST"])
 def send_text():
     data = request.form.get("data")
+    res = requests.post(f"{API_BASE}/api/send", json={"data": data})
+    try:
+        result = res.json()
+        code = result.get("code", "Error")
+    except:
+        code = "Upload failed"
+    return render_template_string(HTML_PAGE, code=code)
 
-    res = requests.post(
-        f"{API_BASE}/api/send",
-        json={"data": data}
-    )
-
-    result = res.json()
-    return render_template_string(HTML_PAGE, code=result.get("code"))
-
-
-# ✅ Send image
+# Send file
 @app.route("/send_file", methods=["POST"])
 def send_file_route():
     file = request.files.get("file")
-
     if not file:
         return render_template_string(HTML_PAGE, file_code="No file selected")
 
-    res = requests.post(
-        f"{API_BASE}/api/send",
-        files={"file": file}
-    )
+    res = requests.post(f"{API_BASE}/api/send", files={"file": file})
+    try:
+        result = res.json()
+        code = result.get("code", "Error")
+    except:
+        print("API RESPONSE:", res.text)
+        code = "Upload failed"
 
-    result = res.json()
-    return render_template_string(HTML_PAGE, file_code=result.get("code"))
+    return render_template_string(HTML_PAGE, file_code=code)
 
-
-# ✅ Get data
+# Get data
 @app.route("/get", methods=["POST"])
 def get():
     code = request.form.get("code")
-
     res = requests.get(f"{API_BASE}/api/get/{code}")
 
-    # If it's an image/file → don't parse JSON
     if "application/json" not in res.headers.get("Content-Type", ""):
-        return render_template_string(
-            HTML_PAGE,
-            image=True,
-            image_code=code
-        )
+        # It's a file
+        return render_template_string(HTML_PAGE, image=True, image_code=code)
 
     result = res.json()
+    return render_template_string(HTML_PAGE, received=result.get("data", result.get("error")))
 
-    return render_template_string(
-        HTML_PAGE,
-        received=result.get("data", result.get("error"))
-    )
-
-
-# ✅ Serve image via frontend
+# Serve image from API
 @app.route("/image/<code>")
 def get_image(code):
     res = requests.get(f"{API_BASE}/api/get/{code}")
-
-    return send_file(
-        io.BytesIO(res.content),
-        mimetype=res.headers.get("Content-Type", "image/png")
-    )
-
+    return send_file(io.BytesIO(res.content), mimetype=res.headers.get("Content-Type", "image/png"))
 
 if __name__ == "__main__":
     import os
