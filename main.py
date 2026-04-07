@@ -1,11 +1,3 @@
-from flask import Flask, request, render_template_string, send_file
-import requests
-import io
-
-app = Flask(__name__)
-
-API_BASE = "https://clipboardserver-production.up.railway.app"  # replace with your API
-
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -28,7 +20,24 @@ img.preview { max-width:100%; margin-top:10px; border-radius:5px; }
 .download-btn:hover { background:#218838; }
 .section { display:none; }
 .section.active { display:block; }
+
+/* Copy button */
+.copy-btn {
+    position:absolute;
+    top:8px;
+    right:8px;
+    background:#4A90E2;
+    color:white;
+    border:none;
+    border-radius:5px;
+    padding:5px 10px;
+    cursor:pointer;
+}
+.copy-btn:hover {
+    background:#357ABD;
+}
 </style>
+
 <script>
 function showSection(name){
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -36,7 +45,19 @@ function showSection(name){
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
     document.getElementById(name+'-btn').classList.add('active');
 }
-// Set the active tab based on server value
+
+// Copy function
+function copyReceived(btn){
+    let text = document.getElementById("received-text").innerText;
+
+    navigator.clipboard.writeText(text).then(() => {
+        btn.innerText = "✅";
+        setTimeout(() => btn.innerText = "📋", 1500);
+    }).catch(() => {
+        btn.innerText = "❌";
+    });
+}
+
 window.onload = function() {
     let section = "{{ section or 'text' }}";
     showSection(section);
@@ -67,7 +88,11 @@ window.onload = function() {
         <input name="code" placeholder="Enter code" value="{{ code_value or '' }}"/>
         <button class="send" type="submit">Get Data</button>
     </form>
-    <pre>{{ received }}</pre>
+
+    <div style="position:relative; margin-top:10px;">
+        <button class="copy-btn" onclick="copyReceived(this)">📋</button>
+        <pre id="received-text">{{ received }}</pre>
+    </div>
 </div>
 
 <!-- Image Section -->
@@ -95,73 +120,3 @@ window.onload = function() {
 </body>
 </html>
 """
-
-@app.route("/")
-def home():
-    return render_template_string(HTML_PAGE)
-
-@app.route("/send_text", methods=["POST"])
-def send_text():
-    data = request.form.get("data")
-    res = requests.post(f"{API_BASE}/api/send", json={"data": data})
-    try:
-        result = res.json()
-        code = result.get("code", "Error")
-    except:
-        code = "Upload failed"
-    return render_template_string(HTML_PAGE, code=code, text_value=data, section="text")
-
-@app.route("/send_file", methods=["POST"])
-def send_file_route():
-    file = request.files.get("file")
-    if not file:
-        return render_template_string(HTML_PAGE, file_code="No file selected", section="image")
-
-    res = requests.post(f"{API_BASE}/api/send", files={"file": (file.filename, file.stream, file.content_type)})
-    try:
-        result = res.json()
-        code = result.get("code", "Error")
-    except:
-        print("API RESPONSE:", res.text)
-        code = "Upload failed"
-
-    # Show preview after upload
-    return render_template_string(
-        HTML_PAGE,
-        file_code=code,
-        image=True,
-        image_code=code,
-        section="image"
-    )
-
-@app.route("/get", methods=["POST"])
-def get():
-    code = request.form.get("code")
-    res = requests.get(f"{API_BASE}/api/get/{code}")
-    # Check if JSON (text) or raw (image)
-    if "application/json" not in res.headers.get("Content-Type", ""):
-        return render_template_string(
-            HTML_PAGE,
-            image=True,
-            image_code=code,
-            image_code_value=code,
-            section="image"
-        )
-    result = res.json()
-    return render_template_string(
-        HTML_PAGE,
-        received=result.get("data", result.get("error")),
-        code_value=code,
-        text_value=result.get("data"),
-        section="text"
-    )
-
-@app.route("/image/<code>")
-def get_image(code):
-    res = requests.get(f"{API_BASE}/api/get/{code}")
-    return send_file(io.BytesIO(res.content), mimetype=res.headers.get("Content-Type", "image/png"))
-
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
